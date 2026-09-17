@@ -9,7 +9,8 @@ plugins {
 android {
     namespace = "com.example.lovers_dictionary"
     
-    compileSdk = 35
+    // 使用 Flutter 默认的版本变量，或者直接写 35
+    compileSdk = flutter.compileSdkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -20,7 +21,7 @@ android {
         applicationId = "com.example.lovers_dictionary"
         
         minSdk = flutter.minSdkVersion
-        targetSdk = 35
+        targetSdk = flutter.targetSdkVersion
         
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -35,7 +36,6 @@ android {
     }
 }
 
-// 统一配置所有 Kotlin 编译任务的 JVM Target，避免 DSL 嵌套报错
 tasks.withType<KotlinCompile>().configureEach {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
