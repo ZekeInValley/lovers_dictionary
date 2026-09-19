@@ -40,6 +40,15 @@ class AppStrings {
   static String get emptyTimeline => isChinese ? '时光轴空空如也，去记录第一条打卡吧！' : 'Timeline is empty!';
   static String get triggeredCode => isChinese ? '解密暗号' : 'Trigger Code';
   static String get noteLabel => isChinese ? '随手记' : 'Note';
+  static String get editDate => isChinese ? '修改日期' : 'Edit Date';
+  static String get delete => isChinese ? '删除' : 'Delete';
+  static String get confirmDeleteTitle => isChinese ? '确认删除' : 'Confirm Delete';
+  static String get confirmDeleteContent => isChinese ? '确定要删除这条打卡记录吗？' : 'Are you sure you want to delete this check-in?';
+  static String get deleteSuccess => isChinese ? '删除成功' : 'Deleted successfully';
+  static String get deleteFailed => isChinese ? '删除失败' : 'Delete failed';
+  static String get updateSuccess => isChinese ? '日期更新成功' : 'Date updated successfully';
+  static String get updateFailed => isChinese ? '更新失败' : 'Update failed';
+
 
   // 心声页面 (Share)
   static String get addShare => isChinese ? '发布心声' : 'New Post';
