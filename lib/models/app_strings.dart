@@ -1,5 +1,92 @@
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
+
 class AppStrings {
-  static bool isChinese = true;
+  // 使用 ValueNotifier 实现语言状态全局可监听
+  static ValueNotifier<bool> isChineseNotifier = ValueNotifier<bool>(true);
+
+  // 快捷获取与设置当前语言状态
+  static bool get isChinese => isChineseNotifier.value;
+
+  // 补全 setter 方法，解决 "There isn't a setter named 'isChinese'" 报错
+  static set isChinese(bool value) {
+    isChineseNotifier.value = value;
+  }
+
+  // 切换语言方法
+  static void toggleLanguage() {
+    isChineseNotifier.value = !isChineseNotifier.value;
+  }
+
+  // 默认备用台词（当网络请求失败或首次加载时使用）
+  static String _dailyQuoteZh = '“世界上有那么多的城镇，城镇中有那么多的酒馆，她却走进了我的。” ——《卡萨布兰卡》';
+  static String _dailyQuoteEn = '"Of all the gin joints in all the towns in all the world, she walks into mine." — Casablanca';
+
+  // 获取当前语言下的每日台词
+  static String get dailyQuote => isChinese ? _dailyQuoteZh : _dailyQuoteEn;
+
+  /// 外部自动获取每日台词（使用 Hitokoto API + 自动翻译英文 + 本地天级缓存）
+  static Future<void> fetchDailyQuote() async {
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now();
+    // 提取当前日期字符串，形如 "2026-09-20"
+    final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final lastFetchDate = prefs.getString('daily_quote_date');
+
+    // 1. 如果今天已经请求并缓存过，直接读取本地数据
+    if (lastFetchDate == todayStr) {
+      _dailyQuoteZh = prefs.getString('daily_quote_zh') ?? _dailyQuoteZh;
+      _dailyQuoteEn = prefs.getString('daily_quote_en') ?? _dailyQuoteEn;
+      return;
+    }
+
+    // 2. 今天尚未请求，发起 Hitokoto API 请求（请求 c=h 影视，c=a 动画）
+    try {
+      final response = await http
+          .get(Uri.parse('https://v1.hitokoto.cn/?c=h&c=a'))
+          .timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final String hitokoto = data['hitokoto'] ?? '';
+        final String from = data['from'] ?? '';
+
+        if (hitokoto.isNotEmpty) {
+          final formattedQuoteZh = from.isNotEmpty ? '“$hitokoto” ——《$from》' : '“$hitokoto”';
+          _dailyQuoteZh = formattedQuoteZh;
+
+          // 自动翻译为英文
+          String translatedEn = '';
+          try {
+            final transRes = await http.get(
+              Uri.parse('https://api.mymemory.translated.net/get?q=${Uri.encodeComponent(hitokoto)}&langpair=zh|en'),
+            ).timeout(const Duration(seconds: 5));
+
+            if (transRes.statusCode == 200) {
+              final transData = json.decode(transRes.body);
+              final String translatedText = transData['responseData']?['translatedText'] ?? '';
+              if (translatedText.isNotEmpty) {
+                translatedEn = from.isNotEmpty ? '"$translatedText" — "$from"' : '"$translatedText"';
+              }
+            }
+          } catch (e) {
+            debugPrint('翻译每日台词失败，使用备用格式: $e');
+          }
+
+          _dailyQuoteEn = translatedEn.isNotEmpty ? translatedEn : formattedQuoteZh;
+
+          // 缓存到本地，避免一天内重复发请求
+          await prefs.setString('daily_quote_date', todayStr);
+          await prefs.setString('daily_quote_zh', _dailyQuoteZh);
+          await prefs.setString('daily_quote_en', _dailyQuoteEn);
+        }
+      }
+    } catch (e) {
+      debugPrint('获取 Hitokoto 每日台词失败，使用本地默认台词: $e');
+    }
+  }
 
   // 基础与通用
   static String get appTitle => isChinese ? '情侣词典' : 'Lovers Dictionary';
@@ -49,7 +136,6 @@ class AppStrings {
   static String get updateSuccess => isChinese ? '日期更新成功' : 'Date updated successfully';
   static String get updateFailed => isChinese ? '更新失败' : 'Update failed';
 
-
   // 心声页面 (Share)
   static String get addShare => isChinese ? '发布心声' : 'New Post';
   static String get shareContent => isChinese ? '想对TA说点什么...' : 'Share your thoughts...';
@@ -68,45 +154,4 @@ class AppStrings {
   static String get wishBtn => isChinese ? '许愿' : 'Make Wish';
   static String get emptyTodo => isChinese ? '清单还是空的，快把浪漫小事列出来吧！' : 'Todo list is empty!';
   static String get unlocked => isChinese ? '已打卡解锁！' : 'Completed!';
-
-  // --- 固定的每日电影台词逻辑 ---
-  static const List<Map<String, String>> _quotes = [
-    {
-      'zh': '“世界上有那么多的城镇，城镇中有那么多的酒馆，她却走进了我的。” ——《卡萨布兰卡》',
-      'en': '"Of all the gin joints in all the towns in all the world, she walks into mine." — Casablanca',
-    },
-    {
-      'zh': '“对我来说，你是完美的。” ——《真爱至上》',
-      'en': '"To me, you are perfect." — Love Actually',
-    },
-    {
-      'zh': '“我跨越了时间的瀚海来寻找你。” ——《吸血惊情四百年》',
-      'en': '"I have crossed oceans of time to find you." — Dracula',
-    },
-    {
-      'zh': '“你让我想要成为一个更好的人。” ——《尽善尽美》',
-      'en': '"You make me want to be a better man." — As Good as It Gets',
-    },
-    {
-      'zh': '“爱你是我做过最简单的事。” ——《傲慢与偏见》',
-      'en': '"You have bewitched me, body and soul, and I love... I love... I love you." — Pride & Prejudice',
-    },
-    {
-      'zh': '“遇到你之前，我从未想过结婚。” ——《泰坦尼克号》',
-      'en': '"Winning that ticket, Rose, was the best thing that ever happened to me." — Titanic',
-    },
-    {
-      'zh': '“如果你活到一百岁，我希望活到一百岁减一天，这样我就不用过没有你的日子。” ——《小熊维尼》',
-      'en': '"If you live to be a hundred, I want to live to be a hundred minus one day so I never have to live without you." — Winnie the Pooh',
-    },
-  ];
-
-  static String get dailyQuote {
-    final now = DateTime.now();
-    // 使用 年+月+日 生成固定的整数 key
-    final dateSeed = now.year * 10000 + now.month * 100 + now.day;
-    final index = dateSeed % _quotes.length;
-    final quoteMap = _quotes[index];
-    return isChinese ? quoteMap['zh']! : quoteMap['en']!;
-  }
 }
