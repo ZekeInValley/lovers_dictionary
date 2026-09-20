@@ -5,7 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class AppStrings {
   // 使用 ValueNotifier 实现语言状态全局可监听
-  static ValueNotifier<bool> isChineseNotifier = ValueNotifier<bool>(true);
+  static ValueNotifier<bool> isChineseNotifier = ValueNotifier<bool>(false);
 
   // 快捷获取与设置当前语言状态
   static bool get isChinese => isChineseNotifier.value;

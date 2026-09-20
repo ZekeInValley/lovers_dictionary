@@ -6,7 +6,7 @@ import 'models/app_strings.dart';
 import 'pages/auth_gate.dart';
 
 // 全局语言切换通知器
-final ValueNotifier<bool> isChineseNotifier = ValueNotifier<bool>(true);
+final ValueNotifier<bool> isChineseNotifier = ValueNotifier<bool>(false);
 
 // 全局壁纸路径通知器（让壁纸在所有页面实时生效）
 final ValueNotifier<String?> wallpaperPathNotifier = ValueNotifier<String?>(null);
