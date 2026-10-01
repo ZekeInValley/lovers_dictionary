@@ -12,13 +12,15 @@ class TodoPage extends StatefulWidget {
 class _TodoPageState extends State<TodoPage> {
   final _supabase = Supabase.instance.client;
 
-  void _showAddTodoDialog() {
-    final titleController = TextEditingController();
+  // 新增/修改 心愿弹窗
+  void _showTodoDialog([Map<String, dynamic>? todo]) {
+    final titleController = TextEditingController(text: todo?['title'] ?? '');
+    final isEditing = todo != null;
 
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(AppStrings.addTodo),
+        title: Text(isEditing ? '编辑心愿' : AppStrings.addTodo),
         content: TextField(
           controller: titleController,
           decoration: InputDecoration(
@@ -33,17 +35,51 @@ class _TodoPageState extends State<TodoPage> {
           ElevatedButton(
             onPressed: () async {
               if (titleController.text.isNotEmpty) {
-                await _supabase.from('todos').insert({
-                  'title': titleController.text,
-                  'is_completed': false,
-                });
+                if (isEditing) {
+                  await _supabase
+                      .from('todos')
+                      .update({'title': titleController.text})
+                      .eq('id', todo['id']);
+                } else {
+                  await _supabase.from('todos').insert({
+                    'title': titleController.text,
+                    'is_completed': false,
+                  });
+                }
 
                 if (!dialogContext.mounted) return;
                 Navigator.pop(dialogContext);
                 setState(() {});
               }
             },
-            child: Text(AppStrings.wishBtn),
+            child: Text(isEditing ? AppStrings.save : AppStrings.wishBtn),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 删除确认弹窗
+  void _deleteTodo(int id) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('删除心愿'),
+        content: const Text('确定要删除这个心愿项吗？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(AppStrings.cancel),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () async {
+              await _supabase.from('todos').delete().eq('id', id);
+              if (!dialogContext.mounted) return;
+              Navigator.pop(dialogContext);
+              setState(() {});
+            },
+            child: const Text('删除', style: TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -109,13 +145,48 @@ class _TodoPageState extends State<TodoPage> {
                       color: isCompleted ? Colors.grey : Colors.black87,
                     ),
                   ),
-                  trailing: isCompleted
-                      ? Chip(
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (isCompleted)
+                        Chip(
                           label: Text(AppStrings.unlocked, style: const TextStyle(fontSize: 11, color: Color(0xFFFF7B9C))),
                           backgroundColor: const Color(0xFFFFE5EC),
                           side: BorderSide.none,
-                        )
-                      : null,
+                        ),
+                      PopupMenuButton<String>(
+                        onSelected: (value) {
+                          if (value == 'edit') {
+                            _showTodoDialog(item);
+                          } else if (value == 'delete') {
+                            _deleteTodo(item['id']);
+                          }
+                        },
+                        itemBuilder: (context) => [
+                          const PopupMenuItem(
+                            value: 'edit',
+                            child: Row(
+                              children: [
+                                Icon(Icons.edit_outlined, size: 18),
+                                SizedBox(width: 8),
+                                Text('编辑'),
+                              ],
+                            ),
+                          ),
+                          const PopupMenuItem(
+                            value: 'delete',
+                            child: Row(
+                              children: [
+                                Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                                SizedBox(width: 8),
+                                Text('删除', style: TextStyle(color: Colors.redAccent)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               );
             },
@@ -123,7 +194,7 @@ class _TodoPageState extends State<TodoPage> {
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _showAddTodoDialog,
+        onPressed: () => _showTodoDialog(),
         backgroundColor: const Color(0xFFFF7B9C),
         child: const Icon(Icons.add, color: Colors.white),
       ),

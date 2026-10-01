@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
+import '../main.dart';
 import '../models/app_strings.dart';
 
 class SharePage extends StatefulWidget {
@@ -13,15 +14,17 @@ class SharePage extends StatefulWidget {
 class _SharePageState extends State<SharePage> {
   final _supabase = Supabase.instance.client;
 
-  void _showAddShareDialog() {
-    final contentController = TextEditingController();
-    final linkController = TextEditingController();
-    final imageController = TextEditingController();
+  // 新增/编辑 心声弹窗
+  void _showShareDialog([Map<String, dynamic>? item]) {
+    final contentController = TextEditingController(text: item?['content'] ?? '');
+    final linkController = TextEditingController(text: item?['link_url'] ?? '');
+    final imageController = TextEditingController(text: item?['image_url'] ?? '');
+    final isEditing = item != null;
 
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(AppStrings.addShare),
+        title: Text(isEditing ? (isChineseNotifier.value ? '编辑心声' : 'Edit Post') : AppStrings.addShare),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -52,12 +55,20 @@ class _SharePageState extends State<SharePage> {
               if (contentController.text.isNotEmpty ||
                   linkController.text.isNotEmpty ||
                   imageController.text.isNotEmpty) {
-                await _supabase.from('shares').insert({
+                final data = {
                   'content': contentController.text,
                   'link_url': linkController.text,
                   'image_url': imageController.text,
-                  'is_shared': false,
-                });
+                };
+
+                if (isEditing) {
+                  await _supabase.from('shares').update(data).eq('id', item['id']);
+                } else {
+                  await _supabase.from('shares').insert({
+                    ...data,
+                    'is_shared': false,
+                  });
+                }
 
                 if (!dialogContext.mounted) return;
                 Navigator.pop(dialogContext);
@@ -65,6 +76,33 @@ class _SharePageState extends State<SharePage> {
               }
             },
             child: Text(AppStrings.save),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // 删除确认
+  void _deleteShare(int id) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(isChineseNotifier.value ? '删除心声' : 'Delete Post'),
+        content: Text(isChineseNotifier.value ? '确定要删除这条心声吗？' : 'Are you sure you want to delete this post?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: Text(AppStrings.cancel),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
+            onPressed: () async {
+              await _supabase.from('shares').delete().eq('id', id);
+              if (!dialogContext.mounted) return;
+              Navigator.pop(dialogContext);
+              setState(() {});
+            },
+            child: Text(isChineseNotifier.value ? '删除' : 'Delete', style: const TextStyle(color: Colors.white)),
           ),
         ],
       ),
@@ -122,15 +160,54 @@ class _SharePageState extends State<SharePage> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(dateStr, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-                        if (!isShared)
-                          TextButton.icon(
-                            onPressed: () => _markAsShared(item['id']),
-                            icon: const Icon(Icons.check_circle_outline, size: 18),
-                            label: Text(AppStrings.markShared),
-                            style: TextButton.styleFrom(
-                              foregroundColor: const Color(0xFFFF7B9C),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (!isShared)
+                              TextButton.icon(
+                                onPressed: () => _markAsShared(item['id']),
+                                icon: const Icon(Icons.check_circle_outline, size: 18),
+                                label: Text(AppStrings.markShared),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: const Color(0xFFFF7B9C),
+                                ),
+                              ),
+                            PopupMenuButton<String>(
+                              onSelected: (value) {
+                                if (value == 'edit') {
+                                  _showShareDialog(item);
+                                } else if (value == 'delete') {
+                                  _deleteShare(item['id']);
+                                }
+                              },
+                              itemBuilder: (context) => [
+                                PopupMenuItem(
+                                  value: 'edit',
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.edit_outlined, size: 18),
+                                      const SizedBox(width: 8),
+                                      Text(isChineseNotifier.value ? '编辑' : 'Edit'),
+                                    ],
+                                  ),
+                                ),
+                                PopupMenuItem(
+                                  value: 'delete',
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        isChineseNotifier.value ? '删除' : 'Delete',
+                                        style: const TextStyle(color: Colors.redAccent),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
+                          ],
+                        ),
                       ],
                     ),
                     if (content.toString().isNotEmpty) ...[
@@ -172,29 +249,34 @@ class _SharePageState extends State<SharePage> {
   Widget build(BuildContext context) {
     return DefaultTabController(
       length: 2,
-      child: Scaffold(
-        appBar: PreferredSize(
-          preferredSize: const Size.fromHeight(48),
-          child: TabBar(
-            indicatorColor: const Color(0xFFFF7B9C),
-            labelColor: const Color(0xFFFF7B9C),
-            tabs: [
-              Tab(text: AppStrings.tabPending),
-              Tab(text: AppStrings.tabShared),
-            ],
-          ),
-        ),
-        body: TabBarView(
-          children: [
-            _buildShareList(false),
-            _buildShareList(true),
-          ],
-        ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: _showAddShareDialog,
-          backgroundColor: const Color(0xFFFF7B9C),
-          child: const Icon(Icons.add, color: Colors.white),
-        ),
+      child: ValueListenableBuilder<bool>(
+        valueListenable: isChineseNotifier,
+        builder: (context, _, __) {
+          return Scaffold(
+            appBar: PreferredSize(
+              preferredSize: const Size.fromHeight(48),
+              child: TabBar(
+                indicatorColor: const Color(0xFFFF7B9C),
+                labelColor: const Color(0xFFFF7B9C),
+                tabs: [
+                  Tab(text: AppStrings.tabPending),
+                  Tab(text: AppStrings.tabShared),
+                ],
+              ),
+            ),
+            body: TabBarView(
+              children: [
+                _buildShareList(false),
+                _buildShareList(true),
+              ],
+            ),
+            floatingActionButton: FloatingActionButton(
+              onPressed: () => _showShareDialog(),
+              backgroundColor: const Color(0xFFFF7B9C),
+              child: const Icon(Icons.add, color: Colors.white),
+            ),
+          );
+        },
       ),
     );
   }
